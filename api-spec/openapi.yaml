@@ -1,0 +1,274 @@
+openapi: 3.1.0
+info:
+  # Do not change the title, if the title changes, the import paths will be broken
+  title: Api
+  version: 0.1.0
+  description: API specification
+servers:
+  - url: /api
+    description: Base API path
+tags:
+  - name: health
+    description: Health operations
+  - name: troubleshooting
+    description: Guided network troubleshooting operations
+paths:
+  /healthz:
+    get:
+      operationId: healthCheck
+      tags: [health]
+      summary: Health check
+      description: Returns server health status
+      responses:
+        "200":
+          description: Healthy
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/HealthStatus"
+  /troubleshoot/sessions:
+    post:
+      operationId: createTroubleshootingSession
+      tags: [troubleshooting]
+      summary: Start a troubleshooting session
+      responses:
+        "201":
+          description: New troubleshooting session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TroubleshootingSession"
+    get:
+      operationId: listTroubleshootingSessions
+      tags: [troubleshooting]
+      summary: List recent troubleshooting sessions
+      responses:
+        "200":
+          description: Recent sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TroubleshootingSessionSummary"
+  /troubleshoot/sessions/{sessionId}:
+    get:
+      operationId: getTroubleshootingSession
+      tags: [troubleshooting]
+      summary: Get a troubleshooting session
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      responses:
+        "200":
+          description: Troubleshooting session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TroubleshootingSession"
+        "404":
+          description: Session not found
+  /troubleshoot/sessions/{sessionId}/answers:
+    post:
+      operationId: submitTroubleshootingAnswer
+      tags: [troubleshooting]
+      summary: Submit the next collector answer
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/AnswerInput"
+      responses:
+        "200":
+          description: Updated troubleshooting session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TroubleshootingSession"
+        "400":
+          description: Invalid answer or session stage
+        "404":
+          description: Session not found
+  /troubleshoot/sessions/{sessionId}/verification:
+    post:
+      operationId: submitFixVerification
+      tags: [troubleshooting]
+      summary: Record whether a fix worked
+      parameters:
+        - $ref: "#/components/parameters/SessionId"
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/VerificationInput"
+      responses:
+        "200":
+          description: Updated troubleshooting session
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TroubleshootingSession"
+        "404":
+          description: Session not found
+components:
+  parameters:
+    SessionId:
+      name: sessionId
+      in: path
+      required: true
+      schema:
+        type: string
+  schemas:
+    HealthStatus:
+      type: object
+      properties:
+        status:
+          type: string
+      required:
+        - status
+    CollectorQuestion:
+      type: object
+      properties:
+        key:
+          type: string
+        prompt:
+          type: string
+        helper:
+          type: string
+        progress:
+          type: number
+        total:
+          type: number
+      required: [key, prompt, helper, progress, total]
+    SymptomSummary:
+      type: object
+      properties:
+        device:
+          type: string
+        symptom:
+          type: string
+        onset:
+          type: string
+        frequency:
+          type: string
+        scope:
+          type: string
+        error_codes:
+          type: string
+        recent_changes:
+          type: string
+      required: [device, symptom, onset, frequency, scope, error_codes, recent_changes]
+    DiagnosisCause:
+      type: object
+      properties:
+        cause:
+          type: string
+        confidence:
+          type: string
+          enum: [High, Medium, Low]
+        reasoning:
+          type: string
+      required: [cause, confidence, reasoning]
+    Diagnosis:
+      type: object
+      properties:
+        top_causes:
+          type: array
+          items:
+            $ref: "#/components/schemas/DiagnosisCause"
+        recommended_diagnostic_test:
+          type: string
+      required: [top_causes, recommended_diagnostic_test]
+    FixPlan:
+      type: object
+      properties:
+        cause_addressed:
+          type: string
+        steps:
+          type: array
+          items:
+            type: string
+        verification_question:
+          type: string
+      required: [cause_addressed, steps, verification_question]
+    TranscriptEntry:
+      type: object
+      properties:
+        role:
+          type: string
+          enum: [assistant, user]
+        text:
+          type: string
+        timestamp:
+          type: string
+      required: [role, text, timestamp]
+    TroubleshootingSession:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+          enum: [collecting, diagnosing, ready_to_fix, verifying, resolved, retrying]
+        step:
+          type: number
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        question:
+          anyOf:
+            - $ref: "#/components/schemas/CollectorQuestion"
+            - type: "null"
+        symptom_summary:
+          anyOf:
+            - $ref: "#/components/schemas/SymptomSummary"
+            - type: "null"
+        diagnosis:
+          anyOf:
+            - $ref: "#/components/schemas/Diagnosis"
+            - type: "null"
+        fix:
+          anyOf:
+            - $ref: "#/components/schemas/FixPlan"
+            - type: "null"
+        attempts:
+          type: number
+        transcript:
+          type: array
+          items:
+            $ref: "#/components/schemas/TranscriptEntry"
+      required: [id, status, step, created_at, updated_at, question, symptom_summary, diagnosis, fix, attempts, transcript]
+    TroubleshootingSessionSummary:
+      type: object
+      properties:
+        id:
+          type: string
+        status:
+          type: string
+        label:
+          type: string
+        created_at:
+          type: string
+        updated_at:
+          type: string
+        attempts:
+          type: number
+      required: [id, status, label, created_at, updated_at, attempts]
+    AnswerInput:
+      type: object
+      properties:
+        answer:
+          type: string
+          minLength: 1
+      required: [answer]
+    VerificationInput:
+      type: object
+      properties:
+        worked:
+          type: boolean
+      required: [worked]
+
